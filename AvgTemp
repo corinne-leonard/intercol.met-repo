@@ -1,0 +1,21 @@
+# reads input dates & temps, finds average temp over span 
+import pandas as pd
+
+# all data in current code is example/fake data to see if code would run correctly, no true data used
+# will only run one storm at a time, would need to run each storm duration separately
+
+data = pd.DataFrame({
+    "date": ["2026-1-21","2026-1-22","2021-1-23","2026-1-24"],
+    "temperature": [1.5, 0.5, -2.1, 2.3]  
+})
+
+data['date'] = pd.to_datetime(data['date'])
+
+events = [("2026-1-21","2026-1-24")]
+
+for start, end in events:
+    event_data = data[(data['date'] >= start) & (data['date'] <= end)]
+    avg_temp = event_data['temperature'].mean()
+
+    print("Storm from", start, "to", end)
+    print("Average Temperature:", avg_temp)

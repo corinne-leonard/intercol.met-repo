@@ -1,0 +1,108 @@
+
+@author: Corinne
+
+#runs through 3 stations in the New Englands region, creates charts listing daily highs and lows from specified storms
+"""
+import pandas as pd
+import requests
+import matplotlib.pyplot as plt
+
+
+# NOAA stations
+
+stations = {
+    "Boston": "USW00014739",
+    "Portland": "USW00014764",
+    "Hartford": "USW00014740"
+}
+
+# Storm dates 
+
+storms = {
+    "1992-12": ("1992-12-10", "1992-12-12"),
+    "1993-03": ("1993-03-12", "1993-03-15"),
+    "1996-01": ("1996-01-06", "1996-01-08"),
+    "1997-04": ("1997-03-31", "1997-04-01"),
+    "2000-12": ("2000-12-27", "2000-12-31"),
+    "2003-02": ("2003-02-15", "2003-02-18"),
+    "2010-03": ("2010-03-12", "2010-03-16"),
+    "2013-02": ("2013-02-08", "2013-02-09"),
+    "2015-01": ("2015-01-26", "2015-01-28"),
+    "2024-01": ("2024-01-09", "2024-01-10")
+}
+
+
+# NOAA Download 
+=
+def get_station_data(station):
+    url = "https://www.ncei.noaa.gov/access/services/data/v1"
+    
+    params = {
+        "dataset": "daily-summaries",
+        "stations": station,
+        "startDate": "1992-01-01",
+        "endDate": "2024-12-31",
+        "dataTypes": "TMAX,TMIN",
+        "format": "json",
+        "units": "metric"
+    }
+    
+    r = requests.get(url, timeout=60, params=params)
+    
+    if r.status_code != 200:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(r.json())
+
+
+#Load in station data 
+
+station_data = {}
+
+for name, station_id in stations.items():
+    print(f"Downloading {name}...")
+    
+    df = get_station_data(station_id)
+    
+    if df.empty:
+        print(f"WARNING: No data for {name}")
+        continue
+    
+    df['DATE'] = pd.to_datetime(df['DATE'])
+    
+    df['TMAX'] = pd.to_numeric(df['TMAX'], errors='coerce')
+    df['TMIN'] = pd.to_numeric(df['TMIN'], errors='coerce')
+    
+    df = df.dropna(subset=['TMAX', 'TMIN'])
+    
+    # Convert to Fahrenheit
+    df['tmax_F'] = df['TMAX'] * 9/5 + 32
+    df['tmin_F'] = df['TMIN'] * 9/5 + 32
+    
+    df['station'] = name
+    
+    station_data[name] = df
+
+
+# Plotting each storm 
+
+for storm, (start, end) in storms.items():
+    
+    plt.figure()
+    
+    for name, df in station_data.items():
+        
+        subset = df[(df['DATE'] >= start) & (df['DATE'] <= end)]
+        
+        if not subset.empty:
+            plt.plot(subset['DATE'], subset['tmax_F'], label=f'{name} High')
+            plt.plot(subset['DATE'], subset['tmin_F'], linestyle='--', label=f'{name} Low')
+    
+    plt.title(f"NOAA Storm Temperatures: {storm}")
+    plt.xlabel("Date")
+    plt.ylabel("Temperature (°F)")
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    
+    plt.show()

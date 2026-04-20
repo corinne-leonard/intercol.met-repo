@@ -1,0 +1,120 @@
+
+@author: Corinne
+"""
+#creates plots to comparitivly show mean temps of data from 3 different stations in New England region 
+import pandas as pd
+import requests
+import matplotlib.pyplot as plt
+
+# NOAA station ID's
+
+stations = {
+    "Boston": "USW00014739",
+    "Portland": "USW00014764",
+    "Hartford": "USW00014740"
+}
+
+
+# Storm dates
+
+storms = {
+    "1992-12": ("1992-12-10", "1992-12-12"),
+    "1993-03": ("1992-03-12", "1992-03-15"),
+    "1996-01": ("1996-01-06", "1996-01-08"),
+    "1997-04": ("1997-03-31", "1997-04-01"),
+    "2000-12": ("2000-12-27", "2000-12-31"),
+    "2003-02": ("2003-02-15", "2003-02-18"),
+    "2010-03": ("2010-03-12", "2010-03-16"),
+    "2013-02": ("2013-02-08", "2013-02-09"),
+    "2015-01": ("2015-01-26", "2015-01-28"),
+    "2024-01": ("2024-01-09", "2024-01-10")
+}
+
+
+# 3. NOAA data download
+
+def get_station_data(station):
+    url = "https://www.ncei.noaa.gov/access/services/data/v1"
+    
+    params = {
+        "dataset": "daily-summaries",
+        "stations": station,
+        "startDate": "1992-01-01",
+        "endDate": "2024-12-31",
+        "dataTypes": "TMAX,TMIN",
+        "format": "json",
+        "units": "metric"
+    }
+    
+    r = requests.get(url, timeout=60, params=params)
+    
+    if r.status_code != 200:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(r.json())
+
+station_data = {}
+
+for name, station_id in stations.items():
+    print(f"Downloading {name}...")
+    
+    df = get_station_data(station_id)
+    
+    if df.empty:
+        continue
+    
+    df['DATE'] = pd.to_datetime(df['DATE'])
+    
+    # FORCE NUMERIC (fixes your crash)
+    df['TMAX'] = pd.to_numeric(df['TMAX'], errors='coerce')
+    df['TMIN'] = pd.to_numeric(df['TMIN'], errors='coerce')
+    df = df.dropna(subset=['TMAX', 'TMIN'])
+    
+    # Convert to Fahrenheit (consistent NOAA metric input)
+    df['tmax_F'] = df['TMAX'] * 9/5 + 32
+    df['tmin_F'] = df['TMIN'] * 9/5 + 32
+    
+    df['station'] = name
+    
+    station_data[name] = df
+
+
+#Storm mean temp
+
+storm_results = []
+
+for storm, (start, end) in storms.items():
+    
+    for name, df in station_data.items():
+        
+        subset = df[(df['DATE'] >= start) & (df['DATE'] <= end)]
+        
+        if not subset.empty:
+            
+            tmean = (subset['tmax_F'] + subset['tmin_F']) / 2
+            
+            storm_results.append({
+                "storm": storm,
+                "station": name,
+                "mean_temp": tmean.mean()
+            })
+
+storm_df = pd.DataFrame(storm_results)
+
+
+# Creates plot
+
+plt.figure()
+
+for name in stations.keys():
+    sub = storm_df[storm_df['station'] == name]
+    plt.plot(sub['storm'], sub['mean_temp'], marker='o', label=name)
+
+plt.title("Nor’easter Mean Temperature by Storm")
+plt.xlabel("Storm")
+plt.ylabel("Mean Temperature (°F)")
+plt.xticks(rotation=45)
+plt.legend()
+plt.tight_layout()
+
+plt.show()
